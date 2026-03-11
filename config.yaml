@@ -1,0 +1,55 @@
+# Data settings
+data:
+  file_path: "data/raw/target_day.csv"
+  timestamp_column: "timestamp"
+  pv_column: "pv_kw"
+  load_column: "load_kw"
+  frequency: "h"
+  power_unit: "kW"
+
+# Appliances to schedule
+appliances:
+  - name: "Dishwasher" # Auto-discovered
+    power_kw: 99.9
+    duration_h: 99.9
+  - name: "Microwave" # Auto-discovered
+    power_kw: 99.9
+    duration_h: 99.9
+  - name: "EV Charger" # Will use YAML fallback
+    power_kw: 7.0
+    duration_h: 4.0
+  - name: "Water Heater" # Will use YAML fallback
+    power_kw: 3.5
+    duration_h: 2.0
+  - name: "HVAC" # Will use YAML fallback
+    power_kw: 4.0
+    duration_h: 5.0
+
+# Optimization parameters
+optimization:
+  method: "compare"
+  ga:
+    population_size: 100
+    num_generations: 200
+    mutation_percent: 10
+    crossover_type: "single_point"
+    parent_selection: "tournament"
+    keep_parents: 2
+    random_seed: 42
+
+# Output and logging
+output:
+  save_plots: true
+  plot_dir: "output/plots"
+  results_file: "output/results.csv"
+  log_file: "logs/optimizer.log"
+  plot_format: "png"
+
+# Plotting aesthetics
+plotting:
+  style: "seaborn-v0_8-whitegrid"
+  figure_size: [12, 6]
+  dpi: 300
+
+# Financials
+electricity_price_per_kwh: 0.28

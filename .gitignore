@@ -1,0 +1,22 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+
+# Project specific
+data/raw/*
+!data/raw/example.csv
+data/processed/*
+output/
+logs/
+*.pdf
+*.png
+.pytest_cache/
+*.egg-info/
