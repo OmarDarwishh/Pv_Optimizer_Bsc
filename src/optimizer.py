@@ -10,38 +10,29 @@ from src.appliance import Appliance
 
 logger = logging.getLogger(__name__)
 
-def brute_force_search(
-    appliances: List[Appliance], 
-    pv_series: np.ndarray, 
-    base_load: np.ndarray
-) -> Tuple[List[int], float]:
-    """
-    Evaluates all possible appliance start combinations to find the absolute optimum.
-    
-    Args:
-        appliances (List[Appliance]): Appliances to schedule.
-        pv_series (np.ndarray): PV generation array.
-        base_load (np.ndarray): Base household load array.
+def get_valid_start_times(appliances: List[Appliance], num_slots: int) -> List[List[int]]:
+    """Calculates valid start times strictly within the allowed windows."""
+    valid_starts = []
+    for app in appliances:
+        duration_slots = int(np.ceil(app.duration_h))
+        # Ensure it starts within the window AND finishes before the day ends
+        max_start_time = min(app.window_end, num_slots - duration_slots)
         
-    Returns:
-        Tuple[List[int], float]: Best start times and the resulting grid import.
-        
-    Raises:
-        MemoryError: If the search space exceeds 10 million combinations.
-    """
+        if app.window_start > max_start_time:
+             raise ValueError(f"Appliance {app.name} cannot fit within its designated time window.")
+             
+        valid_starts.append(list(range(app.window_start, max_start_time + 1)))
+    return valid_starts
+
+def brute_force_search(appliances: List[Appliance], pv_series: np.ndarray, base_load: np.ndarray) -> Tuple[List[int], float]:
     logger.info("Starting brute-force optimization...")
     num_slots = len(base_load)
-    valid_starts = []
     
-    for app in appliances:
-        max_start = num_slots - int(np.ceil(app.duration_h))
-        if max_start < 0:
-            raise ValueError(f"Appliance {app.name} duration exceeds total time slots.")
-        valid_starts.append(range(max_start + 1))
-        
-    # Calculate search space size
+    # 🌟 NEW: Restrict search space using time windows
+    valid_starts = get_valid_start_times(appliances, num_slots)
+    
     search_space_size = math.prod([len(vs) for vs in valid_starts])
-    logger.info(f"Brute-force search space: {search_space_size} combinations.")
+    logger.info(f"Brute-force search space (constrained by windows): {search_space_size} combinations.")
     
     if search_space_size > 10_000_000:
         logger.error("Search space too large for brute-force. Switch to GA.")
@@ -62,38 +53,18 @@ def brute_force_search(
     return best_schedule, best_import
 
 class GAScheduler:
-    """
-    Genetic Algorithm implementation for optimizing appliance schedules.
-    Built on top of PyGAD for high-performance heuristic search.
-    """
+    """Genetic Algorithm implementation built on top of PyGAD."""
     
-    def __init__(
-        self, 
-        appliances: List[Appliance], 
-        pv_series: np.ndarray, 
-        base_load: np.ndarray, 
-        config_dict: Dict[str, Any]
-    ) -> None:
+    def __init__(self, appliances: List[Appliance], pv_series: np.ndarray, base_load: np.ndarray, config_dict: Dict[str, Any]) -> None:
         self.appliances = appliances
         self.pv_series = pv_series
         self.base_load = base_load
         self.config = config_dict
         
-        # Calculate valid gene space (start times) for each appliance dynamically
-        self.gene_space = []
-        num_slots = len(base_load)
-        for app in appliances:
-            max_start = num_slots - int(np.ceil(app.duration_h))
-            if max_start < 0:
-                raise ValueError(f"Appliance {app.name} duration exceeds total time slots.")
-            self.gene_space.append(list(range(max_start + 1)))
+        # 🌟 NEW: Restrict GA gene space using time windows
+        self.gene_space = get_valid_start_times(appliances, len(base_load))
 
     def fitness_func(self, ga_instance: pygad.GA, solution: List[int], solution_idx: int) -> float:
-        """
-        Fitness function for the Genetic Algorithm.
-        PyGAD maximizes fitness, so we return the negative of the grid import.
-        """
-        # Convert NumPy types to standard Python ints for the evaluation function
         int_solution = [int(val) for val in solution]
         grid_imp = evaluate_schedule(int_solution, self.appliances, self.pv_series, self.base_load)
         
@@ -102,19 +73,11 @@ class GAScheduler:
         return -grid_imp 
 
     def run(self) -> Tuple[List[int], float]:
-        """
-        Executes the Genetic Algorithm based on the provided configuration.
-        
-        Returns:
-            Tuple[List[int], float]: Best start times and the resulting grid import.
-        """
         logger.info("Starting Genetic Algorithm optimization...")
         ga_params = self.config.get("ga", {})
         
         num_genes = len(self.appliances)
         mutation_percent = ga_params.get("mutation_percent", 10)
-        
-        # Calculate strict number of mutations to prevent the 0-mutation stall issue
         mutations = max(1, int(num_genes * mutation_percent / 100))
         
         ga_instance = pygad.GA(
