@@ -59,8 +59,6 @@ def main() -> None:
         )
         validate_data(df)
         
-        # 🌟 THE DEMO FIX: Artificial Summer Sun Boost 🌟
-        # We multiply the PV series by 40 so the green curve becomes massive
         pv_series = df['pv_kw'].to_numpy() 
         base_load = df['load_kw'].to_numpy()
         
@@ -117,9 +115,52 @@ def main() -> None:
                 scheduler = GAScheduler(appliances, pv_series, base_load, config.get("optimization"))
                 best_times, optimized_import = scheduler.run()
 
-        price_per_kwh = config.get("electricity_price_per_kwh", 2.23)
+        # --- THESIS FEATURE: EGYPTIAN TIERED PRICING ALGORITHM (OFFICIAL 2024/2025 TARIFFS) ---
+        def calculate_egypt_daily_cost(daily_kwh: float) -> float:
+            """
+            Calculates true daily cost using the official Egyptian Ministry of Electricity brackets.
+            Includes the 'Reset to Zero' penalty for crossing 100, 650, and 1000 kWh thresholds.
+            """
+            monthly_kwh = daily_kwh * 30
+            cost = 0.0
+
+            if monthly_kwh <= 50:
+                # Tier 1: Deep Subsidy
+                cost = monthly_kwh * 0.68
+                
+            elif monthly_kwh <= 100:
+                # Tier 2: Kept Subsidy
+                cost = (50 * 0.68) + ((monthly_kwh - 50) * 0.78)
+                
+            elif monthly_kwh <= 200:
+                # ⚠️ PENALTY 1: Exceeding 100 kWh loses the first two subsidies. Calculated from zero.
+                cost = monthly_kwh * 0.95
+                
+            elif monthly_kwh <= 350:
+                # Tier 4: Standard Middle Class
+                cost = (200 * 0.95) + ((monthly_kwh - 200) * 1.55)
+                
+            elif monthly_kwh <= 650:
+                # Tier 5: Upper Middle Class
+                cost = (200 * 0.95) + (150 * 1.55) + ((monthly_kwh - 350) * 1.95)
+                
+            elif monthly_kwh <= 1000:
+                # ⚠️ PENALTY 2: Exceeding 650 kWh loses ALL previous subsidies. Calculated from zero.
+                cost = monthly_kwh * 2.10
+                
+            else:
+                # ⚠️ PENALTY 3: Exceeding 1000 kWh. Highest penalty rate. Calculated from zero.
+                cost = monthly_kwh * 2.23
+
+            return cost / 30.0  # Convert the monthly bill back to a daily average cost
+
+        # Calculate bills using the realistic bracket system
+        original_daily_cost = calculate_egypt_daily_cost(original_import)
+        optimized_daily_cost = calculate_egypt_daily_cost(optimized_import)
+        
         energy_saved = max(0.0, original_import - optimized_import)
-        cost_saved = energy_saved * price_per_kwh
+        cost_saved = max(0.0, original_daily_cost - optimized_daily_cost)
+        # -----------------------------------------------------------------
         
         optimized_total_load = np.copy(base_load)
         for i, app in enumerate(appliances):
@@ -175,7 +216,6 @@ def main() -> None:
             ax1.plot(df.index, original_total_load, label="Original Load (Grid Dependency)", 
                      color=COLOR_LOAD_OLD, linestyle='--', linewidth=2, zorder=4)
             
-            # TITLE FIX: Smaller font and increased padding
             ax1.set_title("BASELINE: UNOPTIMIZED APPLIANCE SCHEDULE", fontsize=11, fontweight='bold', pad=15)
             ax1.set_ylabel("Power (kW)", fontsize=10, fontweight='semibold')
             ax1.set_ylim(0, max_y)
@@ -189,7 +229,7 @@ def main() -> None:
             ax2.fill_between(df.index, base_load, optimized_total_load, color=COLOR_LOAD_NEW, alpha=0.3, label="Shifted Appliances")
             
             ax2.set_title("AI-OPTIMIZED: SMART SOLAR SELF-CONSUMPTION", fontsize=11, fontweight='bold', pad=15)
-            ax2.set_xlabel("Time of Day (Ausgrid 2013-14 Dataset Cycle)", fontsize=10, fontweight='semibold')
+            ax2.set_xlabel("Time of Day (Ausgrid/PVGIS Fused Dataset)", fontsize=10, fontweight='semibold')
             ax2.set_ylabel("Power (kW)", fontsize=10, fontweight='semibold')
             ax2.set_ylim(0, max_y)
             ax2.grid(True, linestyle=':', alpha=0.5)
@@ -200,25 +240,40 @@ def main() -> None:
             ax2.xaxis.set_major_formatter(mdates.DateFormatter('%H:00'))
             plt.xticks(rotation=0, ha='center')
             
+            # --- 🧠 THESIS KPI CALCULATIONS (SC & SS) ---
+            # 1. Base Metrics (Before AI)
+            base_pv_consumed = np.minimum(pv_series, original_total_load).sum()
+            total_pv = pv_series.sum()
+            total_base_load = original_total_load.sum()
+            
+            base_sc = (base_pv_consumed / total_pv) * 100 if total_pv > 0 else 0
+            base_ss = (base_pv_consumed / total_base_load) * 100 if total_base_load > 0 else 0
+
+            # 2. Optimized Metrics (After AI)
+            opt_pv_consumed = np.minimum(pv_series, optimized_total_load).sum()
+            total_opt_load = optimized_total_load.sum()
+            
+            opt_sc = (opt_pv_consumed / total_pv) * 100 if total_pv > 0 else 0
+            opt_ss = (opt_pv_consumed / total_opt_load) * 100 if total_opt_load > 0 else 0
+
             # --- HEADER FIX: CLEAR OLD TEXT ---
             fig.suptitle("") 
 
-            # Main Title: Reduced from 18 to 15 to save space
+            # Main Title
             fig.text(0.5, 0.96, "THESIS SCHEDULING ANALYTICS: HOUSEHOLD PV SYSTEM", 
                      fontsize=15, fontweight='extra bold', ha='center', color='#1a252f')
             
-            # Metrics Box: Reduced to fontsize 10 for absolute fit
-            metrics_sub = (f"Baseline Import: {original_import:.2f} kWh  |  "
-                          f"Optimized Import: {optimized_import:.2f} kWh  |  "
-                          f"Energy Saved: {(original_import-optimized_import):.2f} kWh  |  "
-                          f"Cost Saved: {cost_saved:.2f} EGP")
+            # Metrics Box with SC and SS
+            metrics_sub = (
+                f"BASELINE  |  Import: {original_import:.2f} kWh  |  Self-Consumption: {base_sc:.1f}%  |  Self-Sufficiency: {base_ss:.1f}%\n"
+                f"OPTIMIZED |  Import: {optimized_import:.2f} kWh  |  Self-Consumption: {opt_sc:.1f}%  |  Self-Sufficiency: {opt_ss:.1f}%\n"
+                f"► DAILY FINANCIAL IMPACT: {cost_saved:.2f} EGP SAVED ◄"
+            )
             
-            fig.text(0.5, 0.92, metrics_sub, fontsize=10, fontweight='bold', ha='center', 
-                     color='#ffffff', bbox=dict(facecolor='#34495e', alpha=0.9, boxstyle='round,pad=0.5'))
+            fig.text(0.5, 0.91, metrics_sub, fontsize=10, fontweight='bold', ha='center', linespacing=1.5,
+                     color='#ffffff', bbox=dict(facecolor='#2c3e50', alpha=0.95, boxstyle='round,pad=0.6'))
             
             # --- THE KEY FIX: SUBPLOTS_ADJUST ---
-            # 'top' moved from 0.86 to 0.82. This pushes the whole graph 
-            # down further away from the text labels.
             fig.subplots_adjust(top=0.82, hspace=0.4, bottom=0.1, left=0.08, right=0.96)
             
             # Save and Final Display

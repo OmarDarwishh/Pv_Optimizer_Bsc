@@ -1,6 +1,14 @@
+pv_system:
+  latitude: 30.0333 # New Cairo location
+  longitude: 31.4833
+  capacity_kw: 5.0 # Total size of the solar array
+  loss_percent: 14 # Wiring, dust, and inverter losses
+  tilt_angle: 30 # 30 degrees is optimal for Egypt
+  azimuth: 0 # 0 = South, 90 = West, -90 = East
+
 # Data settings
 data:
-  file_path: "data/raw/ausgrid_target_day.csv"
+  file_path: "data/raw/dynamic_cairo_target.csv"
   timestamp_column: "timestamp"
   pv_column: "pv_kw"
   load_column: "load_kw"
@@ -12,13 +20,20 @@ appliances:
   - name: "Dishwasher"
     power_kw: 1.5
     duration_h: 1.0
-    window_start: 10 # Cannot start before 10:00
-    window_end: 16 # Must start by 16:00
+    window_start: 10 # Cannot start before 10:00 AM
+    window_end: 16 # Must start by 4:00 PM
+
   - name: "Washing Machine"
     power_kw: 2.0
     duration_h: 1.5
-    window_start: 9 # Cannot start before 09:00
-    window_end: 15 # Must start by 15:00
+    window_start: 9 # Cannot start before 9:00 AM
+    window_end: 15 # Must start by 3:00 PM
+
+  - name: "Water Heater"
+    power_kw: 4.5 # Deliberately heavy load to test the algorithm
+    duration_h: 2.0
+    window_start: 8 # Cannot start before 8:00 AM
+    window_end: 17 # Must start by 5:00 PM
 
 # Optimization parameters
 optimization:
