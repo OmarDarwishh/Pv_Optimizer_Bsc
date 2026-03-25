@@ -1,62 +1,54 @@
-pv_system:
-  latitude: 30.0333 # New Cairo location
-  longitude: 31.4833
-  capacity_kw: 5.0 # Total size of the solar array
-  loss_percent: 14 # Wiring, dust, and inverter losses
-  tilt_angle: 30 # 30 degrees is optimal for Egypt
-  azimuth: 0 # 0 = South, 90 = West, -90 = East
-
-# Data settings
-data:
-  file_path: "data/raw/dynamic_cairo_target.csv"
-  timestamp_column: "timestamp"
-  pv_column: "pv_kw"
-  load_column: "load_kw"
-  frequency: "h"
-  power_unit: "kW"
-
-# Appliances to schedule (with Academic Time Windows)
 appliances:
-  - name: "Dishwasher"
-    power_kw: 1.5
-    duration_h: 1.0
-    window_start: 10 # Cannot start before 10:00 AM
-    window_end: 16 # Must start by 4:00 PM
-
-  - name: "Washing Machine"
-    power_kw: 2.0
-    duration_h: 1.5
-    window_start: 9 # Cannot start before 9:00 AM
-    window_end: 15 # Must start by 3:00 PM
-
-  - name: "Water Heater"
-    power_kw: 4.5 # Deliberately heavy load to test the algorithm
-    duration_h: 2.0
-    window_start: 8 # Cannot start before 8:00 AM
-    window_end: 17 # Must start by 5:00 PM
-
-# Optimization parameters
+- duration_h: 1.0
+  name: Dishwasher
+  power_kw: 1.5
+  window_end: 16
+  window_start: 10
+- duration_h: 1.5
+  name: Washing Machine
+  power_kw: 2.0
+  window_end: 15
+  window_start: 9
+- duration_h: 2.0
+  name: Water Heater
+  power_kw: 4.5
+  window_end: 17
+  window_start: 8
+data:
+  file_path: data/raw/dynamic_cairo_target.csv
+  frequency: h
+  load_column: load_kw
+  power_unit: kW
+  pv_column: pv_kw
+  timestamp_column: timestamp
+electricity_price_per_kwh: 2.23
 optimization:
-  method: "compare" # Keep compare mode to generate the benchmarking table!
   ga:
-    population_size: 100
-    num_generations: 200
-    mutation_percent: 10
-    crossover_type: "single_point"
-    parent_selection: "tournament"
+    crossover_type: single_point
     keep_parents: 2
+    mutation_percent: 10
+    num_generations: 200
+    parent_selection: tournament
+    population_size: 100
     random_seed: 42
-
+  method: compare
 output:
+  log_file: logs/optimizer.log
+  plot_dir: output/plots
+  plot_format: png
+  results_file: output/results.csv
   save_plots: true
-  plot_dir: "output/plots"
-  results_file: "output/results.csv"
-  log_file: "logs/optimizer.log"
-  plot_format: "png"
-
 plotting:
-  style: "seaborn-v0_8-whitegrid"
-  figure_size: [12, 6]
   dpi: 300
-
-electricity_price_per_kwh: 2.23 # Updated to realistic EGP upper tier
+  figure_size:
+  - 12
+  - 6
+  style: seaborn-v0_8-whitegrid
+pv_system:
+  azimuth: 0
+  capacity_kw: 5.0
+  latitude: 30.0333
+  longitude: 31.4833
+  loss_percent: 14
+  tilt: 30
+  tilt_angle: 30
