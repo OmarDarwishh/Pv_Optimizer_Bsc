@@ -1,37 +1,62 @@
-# 🎓 PV Self-Consumption Optimizer
+PV Self-Consumption Optimizer using Smart Appliance Scheduling
+📌 Project Overview
+This repository contains a dynamic, dual-API Smart Home Energy Management System (HEMS) designed to maximize household solar self-consumption. By orchestrating astronomical solar physics, live meteorological forecasts, and combinatorial optimization algorithms, the system intelligently schedules heavy appliance loads to align with localized solar generation windows.
 
-![Python Version](https://img.shields.io/badge/python-3.9%2B-blue)
-![License](https://img.shields.io/badge/license-MIT-green)
-![Build Status](https://img.shields.io/badge/build-passing-brightgreen)
+This project was developed as a comprehensive thesis for a B.Sc. in Computer Engineering, demonstrating advanced systems design, data fusion, and algorithmic benchmarking.
 
-A production-ready Python application designed to optimize household appliance schedules, maximizing photovoltaic (PV) self-consumption. Developed as a Bachelor Thesis project in the MET department at GUC.
+✨ Core Architecture & Features
+Dual-API Environmental Orchestration:
 
-## 📌 Project Overview
+PVGIS Integration: Calculates precise Plane of Array (POA) clear-sky irradiance based on user-defined hardware parameters (Latitude, Longitude, Panel Capacity, Tilt, and Azimuth).
 
-As renewable energy adoption grows, maximizing the self-consumption of rooftop solar PV systems is critical for grid stability and financial savings. This tool ingests household energy load and PV generation data, cleans it, and applies advanced search algorithms (Genetic Algorithm and Brute-Force) to find the absolute most cost-effective schedule for shiftable appliances.
+Open-Meteo Integration: Fetches live, localized 24-hour cloud cover forecasts to mathematically attenuate the clear-sky baseline, generating an ultra-realistic, weather-adjusted solar curve.
 
-## 🚀 Features
+Dynamic Constraint-Based Scheduling:
 
-- **Robust Data Pipeline:** Handles missing timestamps, interpolates gaps, and formats raw CSV data.
-- **Genetic Algorithm (GA):** Utilizes `pygad` for scalable, high-performance scheduling of multiple appliances.
-- **Financial Evaluation:** Calculates self-consumption, self-sufficiency, and exact monetary savings.
-- **Thesis-Ready Visualizations:** Generates high-DPI, publication-ready load comparison graphs.
+Users define appliance power profiles, durations, and strict operational time windows via a decoupled config.yaml interface.
 
-## 📖 Documentation
+Algorithmic Routing & Benchmarking:
 
-- [User Guide](docs/user_guide.md) - Full setup and installation instructions.
-- [Walkthrough Example](docs/example.md) - A step-by-step look at the optimization in action.
+The engine calculates the combinatorial search space in real-time.
 
-## 💻 Quick Start
+Brute-Force Engine: Automatically deployed for constrained spaces (<500k combinations) to guarantee the Global Optimum in milliseconds.
 
-```bash
-# Clone and enter the directory
-python -m venv venv
-# Activate environment (Windows: .\venv\Scripts\activate | Mac/Linux: source venv/bin/activate)
+Genetic Algorithm (GA): A heuristic solver deployed for massive search spaces to find near-optimal local minimums without resource exhaustion.
 
-# Install the package
-pip install -e .
+Economic Penalty Avoidance:
 
-# Run the optimizer
+Encodes the official 2024/2025 Egyptian Ministry of Electricity tiered tariff system. The optimizer actively schedules loads to prevent households from crossing critical monthly consumption thresholds (e.g., the 650 kWh "Reset to Zero" penalty trap), preserving government subsidies.
+
+🚀 Quick Start
+
+1. Clone and Install
+
+Bash
+git clone https://github.com/yourusername/Pv_Optimizer_Vol1.git
+cd Pv_Optimizer_Vol1
+pip install -r requirements.txt 2. Configure Hardware & Appliances
+Edit config.yaml to set your specific roof geometry and appliance constraints:
+
+YAML
+pv_system:
+capacity_kw: 5.0
+tilt_angle: 30
+azimuth: 0 # South
+appliances:
+
+- name: "Washing Machine"
+  power_kw: 2.0
+  duration_h: 1.5
+  window_start: 9
+  window_end: 15
+
+3. Run the Dual-API Orchestrator
+   Fetch tomorrow's astronomy and weather forecast:
+
+Bash
+python scripts/fetch_pvgis_data.py 4. Execute the Optimizer
+
+Bash
 pv-optimizer
-```
+📊 Output Analytics
+The system generates terminal-based algorithmic benchmarking and a high-resolution Matplotlib visualization comparing the baseline grid dependency against the AI-shifted schedule, detailing Self-Consumption (SC) and Self-Sufficiency (SS) KPIs.
