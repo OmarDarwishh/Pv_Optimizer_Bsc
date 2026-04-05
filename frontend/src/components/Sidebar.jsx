@@ -1,5 +1,5 @@
 import React from "react";
-import { Clock, Sun, Play } from "lucide-react";
+import { Clock, Sun, Play, Power } from "lucide-react";
 
 export default function Sidebar({
   config,
@@ -7,10 +7,119 @@ export default function Sidebar({
   handleOptimize,
   loading,
 }) {
-  // This helper updates the specific value in our config object
   const handleChange = (e) => {
     const { name, value } = e.target;
     setConfig((prev) => ({ ...prev, [name]: Number(value) }));
+  };
+
+  // NEW: Helper function to toggle the enabled state
+  const toggleAppliance = (appKey) => {
+    setConfig((prev) => ({ ...prev, [appKey]: !prev[appKey] }));
+  };
+
+  // NEW: Reusable UI block for appliances with the ON/OFF switch
+  const ApplianceBlock = ({ name, power, enabledKey, startKey, endKey }) => {
+    const isEnabled = config[enabledKey];
+    return (
+      <div
+        style={{
+          background: "#1e293b",
+          padding: "16px",
+          borderRadius: "8px",
+          borderLeft: isEnabled ? "4px solid #10b981" : "4px solid #334155",
+          transition: "all 0.3s",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginBottom: "12px",
+          }}
+        >
+          <p
+            style={{
+              fontSize: "0.85rem",
+              color: isEnabled ? "#f8fafc" : "#94a3b8",
+              fontWeight: "bold",
+            }}
+          >
+            {name} ({power} kW)
+          </p>
+          <button
+            onClick={() => toggleAppliance(enabledKey)}
+            style={{
+              background: isEnabled ? "#059669" : "transparent",
+              border: isEnabled ? "none" : "1px solid #475569",
+              color: isEnabled ? "#fff" : "#94a3b8",
+              padding: "4px 10px",
+              borderRadius: "12px",
+              fontSize: "0.7rem",
+              fontWeight: "bold",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: "4px",
+            }}
+          >
+            <Power size={12} /> {isEnabled ? "ON" : "OFF"}
+          </button>
+        </div>
+
+        {/* Fades out and disables inputs when OFF */}
+        <div
+          style={{
+            display: "flex",
+            gap: "10px",
+            opacity: isEnabled ? 1 : 0.4,
+            pointerEvents: isEnabled ? "auto" : "none",
+            transition: "opacity 0.3s",
+          }}
+        >
+          <label style={{ fontSize: "0.75rem", color: "#94a3b8", flex: 1 }}>
+            Start After:
+            <input
+              type="number"
+              name={startKey}
+              min="0"
+              max="23"
+              value={config[startKey]}
+              onChange={handleChange}
+              style={{
+                width: "100%",
+                padding: "4px",
+                background: "#0f172a",
+                color: "white",
+                border: "1px solid #334155",
+                borderRadius: "4px",
+                marginTop: "4px",
+              }}
+            />
+          </label>
+          <label style={{ fontSize: "0.75rem", color: "#94a3b8", flex: 1 }}>
+            Finish By:
+            <input
+              type="number"
+              name={endKey}
+              min="0"
+              max="23"
+              value={config[endKey]}
+              onChange={handleChange}
+              style={{
+                width: "100%",
+                padding: "4px",
+                background: "#0f172a",
+                color: "white",
+                border: "1px solid #334155",
+                borderRadius: "4px",
+                marginTop: "4px",
+              }}
+            />
+          </label>
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -20,7 +129,6 @@ export default function Sidebar({
         <p>PV Self-Consumption System</p>
       </div>
 
-      {/* Hardware Sliders */}
       <div className="control-section">
         <h3 style={{ display: "flex", alignItems: "center", gap: "8px" }}>
           <Sun size={16} /> Hardware Configuration
@@ -70,7 +178,6 @@ export default function Sidebar({
         </div>
       </div>
 
-      {/* Appliance Windows */}
       <div className="control-section">
         <h3 style={{ display: "flex", alignItems: "center", gap: "8px" }}>
           <Clock size={16} /> Appliance Constraints
@@ -80,116 +187,30 @@ export default function Sidebar({
             display: "flex",
             flexDirection: "column",
             gap: "16px",
-            background: "#1e293b",
-            padding: "16px",
-            borderRadius: "8px",
           }}
         >
-          <div>
-            <p
-              style={{
-                fontSize: "0.85rem",
-                color: "#f8fafc",
-                marginBottom: "8px",
-                fontWeight: "bold",
-              }}
-            >
-              Dishwasher (1.5 kW)
-            </p>
-            <div style={{ display: "flex", gap: "10px" }}>
-              <label style={{ fontSize: "0.75rem", color: "#94a3b8", flex: 1 }}>
-                Start After:
-                <input
-                  type="number"
-                  name="dwStart"
-                  min="0"
-                  max="23"
-                  value={config.dwStart}
-                  onChange={handleChange}
-                  style={{
-                    width: "100%",
-                    padding: "4px",
-                    background: "#0f172a",
-                    color: "white",
-                    border: "1px solid #334155",
-                    borderRadius: "4px",
-                  }}
-                />
-              </label>
-              <label style={{ fontSize: "0.75rem", color: "#94a3b8", flex: 1 }}>
-                Finish By:
-                <input
-                  type="number"
-                  name="dwEnd"
-                  min="0"
-                  max="23"
-                  value={config.dwEnd}
-                  onChange={handleChange}
-                  style={{
-                    width: "100%",
-                    padding: "4px",
-                    background: "#0f172a",
-                    color: "white",
-                    border: "1px solid #334155",
-                    borderRadius: "4px",
-                  }}
-                />
-              </label>
-            </div>
-          </div>
-
-          <div>
-            <p
-              style={{
-                fontSize: "0.85rem",
-                color: "#f8fafc",
-                marginBottom: "8px",
-                fontWeight: "bold",
-              }}
-            >
-              Washing Machine (2.0 kW)
-            </p>
-            <div style={{ display: "flex", gap: "10px" }}>
-              <label style={{ fontSize: "0.75rem", color: "#94a3b8", flex: 1 }}>
-                Start After:
-                <input
-                  type="number"
-                  name="wmStart"
-                  min="0"
-                  max="23"
-                  value={config.wmStart}
-                  onChange={handleChange}
-                  style={{
-                    width: "100%",
-                    padding: "4px",
-                    background: "#0f172a",
-                    color: "white",
-                    border: "1px solid #334155",
-                    borderRadius: "4px",
-                  }}
-                />
-              </label>
-              <label style={{ fontSize: "0.75rem", color: "#94a3b8", flex: 1 }}>
-                Finish By:
-                <input
-                  type="number"
-                  name="wmEnd"
-                  min="0"
-                  max="23"
-                  value={config.wmEnd}
-                  onChange={handleChange}
-                  style={{
-                    width: "100%",
-                    padding: "4px",
-                    background: "#0f172a",
-                    color: "white",
-                    border: "1px solid #334155",
-                    borderRadius: "4px",
-                  }}
-                />
-              </label>
-            </div>
-          </div>
+          {/* We now dynamically render all 3 appliances! */}
+          <ApplianceBlock
+            name="Dishwasher"
+            power="1.5"
+            enabledKey="dwEnabled"
+            startKey="dwStart"
+            endKey="dwEnd"
+          />
+          <ApplianceBlock
+            name="Washing Machine"
+            power="2.0"
+            enabledKey="wmEnabled"
+            startKey="wmStart"
+            endKey="wmEnd"
+          />
+          <ApplianceBlock
+            name="Water Heater"
+            power="3.0"
+            enabledKey="whEnabled"
+            startKey="whStart"
+            endKey="whEnd"
+          />
         </div>
       </div>
 
