@@ -178,8 +178,14 @@ async def run_optimization(payload: OptimizationPayload):
             "end": timestamps[end_idx]
         })
 
-    # Calculate Self-Consumption KPI
+    # --- ULTRA ACCURATE BEFORE & AFTER MATH ---
     total_pv = pv_series.sum()
+    
+    # 1. Base SC (Before AI - House running normally without shifted loads)
+    base_pv_consumed = np.minimum(pv_series, base_load).sum()
+    base_sc = (base_pv_consumed / total_pv) * 100 if total_pv > 0 else 0
+
+    # 2. Optimized SC (After AI - Loads shifted into solar peak)
     opt_pv_consumed = np.minimum(pv_series, optimized_total_load).sum()
     opt_sc = (opt_pv_consumed / total_pv) * 100 if total_pv > 0 else 0
 
@@ -192,7 +198,8 @@ async def run_optimization(payload: OptimizationPayload):
             "original_import": round(original_import, 2),
             "optimized_import": round(optimized_import, 2),
             "cost_saved": round(cost_saved, 2),
-            "self_consumption": round(opt_sc, 1)
+            "self_consumption": round(opt_sc, 1),
+            "base_sc": round(base_sc, 1) # <--- NEW FIELD ADDED HERE!
         },
         "schedules": appliance_schedules,
         "charts": {

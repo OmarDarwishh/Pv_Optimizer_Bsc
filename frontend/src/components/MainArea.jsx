@@ -180,7 +180,6 @@ export default function MainArea({ results }) {
               <span style={{ fontSize: "1rem", color: "#94a3b8" }}>kWh</span>
             </h2>
           </div>
-          {/* UPDATED: Clearly shows the avoided kWh AND the original baseline it came from */}
           <TrendBadge
             value={`${importSaved} kWh`}
             label={`avoided (from original ${kpis.original_import} kWh)`}
@@ -218,10 +217,11 @@ export default function MainArea({ results }) {
               {kpis.self_consumption}%
             </h2>
           </div>
+          {/* UPDATED: Clearly shows the exact Baseline SC before optimization */}
           {kpis.base_sc !== undefined && (
             <TrendBadge
               value={`+${scImprovement}%`}
-              label="improvement"
+              label={`improvement (from original ${kpis.base_sc}%)`}
               isPositive={true}
             />
           )}
@@ -254,7 +254,6 @@ export default function MainArea({ results }) {
               <span style={{ fontSize: "1rem", color: "#94a3b8" }}>EGP</span>
             </h2>
           </div>
-          {/* UPDATED: Formal reference to the Egyptian Government pricing model */}
           <p
             style={{
               color: "#94a3b8",
