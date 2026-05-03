@@ -2,21 +2,17 @@
 """
 NASA POWER -> pvlib historical PV simulator.
 
-Physics chain (each step matches the conventions used by PVGIS / NREL PVWatts):
+Physics chain:
   1. Fetch NASA POWER hourly GHI / DHI / T2M / WS10M for the requested date.
   2. Clean -999 fill values, interpolate to 15-minute resolution.
   3. Compute solar position; estimate DNI from GHI (DIRINT).
   4. Transpose to plane-of-array irradiance (Perez model).
-  5. Apply DC-side system losses (soiling, mismatch, wiring, IAM, spectral,
-     LID, nameplate, availability) BEFORE the DC model -- canonical PVWatts.
-  6. Scale 10 m wind to module-level wind via power-law (alpha=0.143) so
+  5. Scale 10 m wind to module-level wind via power-law (alpha=0.143) so
      the PVsyst thermal model receives the wind speed it was calibrated on.
-  7. PVsyst cell temperature -> PVWatts DC -> PVWatts inverter with
-     DC/AC oversizing so that the inverter clips at AC nameplate.
+  6. PVsyst cell temperature -> PVWatts DC -> PVWatts inverter, then a
+     flat system-loss factor (loss_percent from config) on the AC side.
 
-All technology constants (gamma_pdc, loss_percent, dc_ac_ratio,
-module_height_m) are read from config.yaml so the model can be re-tuned
-for different hardware without code edits.
+`loss_percent` and `module_height_m` are read from config.yaml.
 """
 import os
 import requests
@@ -42,8 +38,6 @@ def _load_pv_config() -> dict:
     pv = cfg.get("pv_system", {}) or {}
     return {
         "loss_percent": float(pv.get("loss_percent", 14.0)),
-        "gamma_pdc": float(pv.get("gamma_pdc", -0.0040)),
-        "dc_ac_ratio": float(pv.get("dc_ac_ratio", 1.20)),
         "module_height_m": float(pv.get("module_height_m", 3.0)),
     }
 
@@ -154,35 +148,23 @@ def fetch_and_simulate_nasa_power(lat: float, lon: float, capacity_kw: float, ti
     )
 
     # 6. PVWatts DC + inverter chain.
-    # System losses are applied as an EFFECTIVE-IRRADIANCE reduction
-    # BEFORE the DC model -- this is the canonical PVWatts formulation.
-    # Previously we multiplied AC by (1 - loss_pct), which is dimensionally
-    # the wrong stage and biases the temperature derate.
-    pdc0_dc_watts = capacity_kw * 1000.0
-    loss_factor = 1.0 - (pv_cfg["loss_percent"] / 100.0)
-    effective_irradiance = poa_irradiance["poa_global"] * loss_factor
+    pdc0_watts = capacity_kw * 1000.0
 
     dc_power = pvlib.pvsystem.pvwatts_dc(
-        effective_irradiance=effective_irradiance,
+        effective_irradiance=poa_irradiance["poa_global"],
         temp_cell=cell_temperature,
-        pdc0=pdc0_dc_watts,
-        gamma_pdc=pv_cfg["gamma_pdc"],
+        pdc0=pdc0_watts,
+        gamma_pdc=-0.004,
     )
 
-    # Inverter clipping: DC array nameplate exceeds AC inverter rating
-    # by `dc_ac_ratio`. pvlib.inverter.pvwatts treats `pdc0` as the
-    # DC input that produces AC nameplate -- so passing the AC-side
-    # rating naturally clips peak hours.
-    inv_pdc0_watts = pdc0_dc_watts / pv_cfg["dc_ac_ratio"]
-    ac_power = pvlib.inverter.pvwatts(pdc=dc_power, pdc0=inv_pdc0_watts)
+    ac_power = pvlib.inverter.pvwatts(pdc=dc_power, pdc0=pdc0_watts)
+    ac_power = ac_power * (1.0 - pv_cfg["loss_percent"] / 100.0)
 
     df_15min["ac_power_kw"] = (ac_power / 1000.0).clip(lower=0)
 
     print(
         f"[OK] NASA simulation complete (Perez, "
-        f"{pv_cfg['loss_percent']:.1f}% DC losses, "
-        f"DC/AC={pv_cfg['dc_ac_ratio']:.2f}, "
-        f"gamma_pdc={pv_cfg['gamma_pdc']:.4f}/degC)."
+        f"{pv_cfg['loss_percent']:.1f}% system losses)."
     )
     return df_15min
 

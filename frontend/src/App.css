@@ -842,3 +842,214 @@ body {
   font-size: 0.72rem;
   flex-shrink: 0;
 }
+
+/* ============ TOAST / ERROR MODAL ============ */
+.toast-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(2, 6, 18, 0.62);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 24px;
+  animation: toast-fade-in 0.18s var(--ease);
+}
+
+@keyframes toast-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.toast-modal {
+  position: relative;
+  width: min(520px, 100%);
+  background: linear-gradient(180deg, var(--bg-panel) 0%, #1a2537 100%);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+  animation: toast-slide-up 0.28s var(--ease);
+}
+
+@keyframes toast-slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Top accent bar — color encodes severity */
+.toast-modal::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--toast-accent, var(--accent-red));
+  box-shadow: 0 0 18px var(--toast-accent, var(--accent-red));
+}
+
+.toast-modal--warning {
+  --toast-accent: var(--accent-amber);
+}
+.toast-modal--error {
+  --toast-accent: var(--accent-red);
+}
+
+.toast-modal__close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition:
+    background 0.15s var(--ease),
+    color 0.15s var(--ease),
+    border-color 0.15s var(--ease);
+}
+
+.toast-modal__close:hover {
+  background: rgba(148, 163, 184, 0.1);
+  border-color: var(--border-strong);
+  color: var(--text-main);
+}
+
+.toast-modal__head {
+  display: flex;
+  gap: 14px;
+  padding: 22px 56px 16px 22px;
+}
+
+.toast-modal__icon {
+  flex-shrink: 0;
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--toast-accent) 15%, transparent);
+  color: var(--toast-accent);
+  border: 1px solid color-mix(in srgb, var(--toast-accent) 30%, transparent);
+}
+
+.toast-modal__title-block {
+  flex: 1;
+  min-width: 0;
+}
+
+.toast-modal__title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text-main);
+  letter-spacing: -0.01em;
+  margin-bottom: 6px;
+}
+
+.toast-modal__message {
+  font-size: 0.86rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.toast-modal__list {
+  list-style: none;
+  margin: 0 22px 18px 22px;
+  padding: 12px 14px;
+  background: var(--bg-deep);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-md);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.toast-modal__item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px;
+  border-left: 2px solid var(--toast-accent);
+  background: rgba(148, 163, 184, 0.04);
+  border-radius: 0 6px 6px 0;
+}
+
+.toast-modal__item-name {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--text-main);
+  letter-spacing: 0.01em;
+}
+
+.toast-modal__item-detail {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.toast-modal__item-detail strong {
+  color: var(--text-main);
+  font-weight: 600;
+}
+
+.toast-modal__item-detail svg {
+  color: var(--text-dim);
+  flex-shrink: 0;
+}
+
+.toast-modal__footer {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0 22px 22px 22px;
+}
+
+.toast-modal__action {
+  background: linear-gradient(135deg, var(--accent-green) 0%, #059669 100%);
+  color: #021b10;
+  border: none;
+  padding: 10px 22px;
+  border-radius: var(--r-sm);
+  font-weight: 700;
+  font-size: 0.85rem;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  box-shadow:
+    0 4px 12px rgba(16, 185, 129, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  transition: all 0.18s var(--ease);
+}
+
+.toast-modal__action:hover {
+  transform: translateY(-1px);
+  box-shadow:
+    0 6px 18px rgba(16, 185, 129, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.toast-modal__action:active {
+  transform: translateY(0);
+}

@@ -17,7 +17,7 @@ Pipeline:
   4. Re-decompose attenuated GHI into DNI + DHI via Erbs.
   5. Run the same physics chain as the NASA endpoint:
      Perez transposition, wind-corrected PVsyst cell temperature,
-     PVWatts DC with DC-side losses, PVWatts inverter with DC/AC clipping.
+     PVWatts DC + inverter, then a flat system-loss factor.
 
 All hardware constants come from config.yaml -- see _load_pv_config()
 in src/pv_physics_engine.py for the canonical loader; we re-implement
@@ -37,8 +37,6 @@ def _load_pv_config(cfg: dict) -> dict:
     pv = cfg.get("pv_system", {}) or {}
     return {
         "loss_percent": float(pv.get("loss_percent", 14.0)),
-        "gamma_pdc": float(pv.get("gamma_pdc", -0.0040)),
-        "dc_ac_ratio": float(pv.get("dc_ac_ratio", 1.20)),
         "module_height_m": float(pv.get("module_height_m", 3.0)),
     }
 
@@ -171,20 +169,18 @@ def fetch_and_fuse_dynamic_data():
         wind_speed=wind_module,
     )
 
-    # ---- 6. PVWatts DC with DC-side losses + inverter clipping ----
-    pdc0_dc_watts = capacity_kw * 1000.0
-    loss_factor = 1.0 - (pv_cfg["loss_percent"] / 100.0)
-    effective_irradiance = poa["poa_global"] * loss_factor
+    # ---- 6. PVWatts DC + inverter chain ----
+    pdc0_watts = capacity_kw * 1000.0
 
     dc_power = pvlib.pvsystem.pvwatts_dc(
-        effective_irradiance=effective_irradiance,
+        effective_irradiance=poa["poa_global"],
         temp_cell=cell_temp,
-        pdc0=pdc0_dc_watts,
-        gamma_pdc=pv_cfg["gamma_pdc"],
+        pdc0=pdc0_watts,
+        gamma_pdc=-0.004,
     )
 
-    inv_pdc0_watts = pdc0_dc_watts / pv_cfg["dc_ac_ratio"]
-    ac_power = pvlib.inverter.pvwatts(pdc=dc_power, pdc0=inv_pdc0_watts)
+    ac_power = pvlib.inverter.pvwatts(pdc=dc_power, pdc0=pdc0_watts)
+    ac_power = ac_power * (1.0 - pv_cfg["loss_percent"] / 100.0)
     pv_kw = (ac_power / 1000.0).clip(lower=0).fillna(0)
 
     # ---- 7. Merge with base load and save ----
@@ -202,12 +198,10 @@ def fetch_and_fuse_dynamic_data():
 
     print("\n" + "=" * 60)
     print(f"[OK] Forecast saved: {output_path}")
-    print(f"     Clear-sky peak GHI:   {clearsky['ghi'].max():.0f} W/m^2")
-    print(f"     Forecast peak power:  {pv_kw.max():.2f} kW")
+    print(f"     Clear-sky peak GHI:    {clearsky['ghi'].max():.0f} W/m^2")
+    print(f"     Forecast peak power:   {pv_kw.max():.2f} kW")
     print(f"     Mean cloud (lo/md/hi): {cc_low.mean():.0f}/{cc_mid.mean():.0f}/{cc_high.mean():.0f}%")
-    print(f"     DC losses applied:    {pv_cfg['loss_percent']:.1f}%")
-    print(f"     DC/AC ratio:          {pv_cfg['dc_ac_ratio']:.2f}")
-    print(f"     gamma_pdc:            {pv_cfg['gamma_pdc']:.4f}/degC")
+    print(f"     System losses applied: {pv_cfg['loss_percent']:.1f}%")
     print("=" * 60 + "\n")
 
 

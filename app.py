@@ -16,9 +16,9 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from scripts.fetch_forecast_data import fetch_and_fuse_dynamic_data
 from src.pv_physics_engine import fetch_and_simulate_nasa_power
 from src.config import Config
-from src.data_loader import load_and_clean_data, auto_discover_appliances
+from src.data_loader import load_and_clean_data
 from src.appliance import Appliance
-from src.optimizer import GAScheduler
+from src.optimizer import GAScheduler, InfeasibleScheduleError, validate_appliance_constraints
 from src.evaluation import evaluate_schedule
 
 app = FastAPI(title="PV Optimizer AI API")
@@ -131,24 +131,51 @@ def update_config_from_payload(payload):
         yaml.dump(config_data, file, default_flow_style=False)
 
 def run_core_algorithm(pv_series, base_load, timestamps):
-    """Shared GA optimizer pipeline for both forecast and historical endpoints."""
+    """Shared GA optimizer pipeline for both forecast and historical endpoints.
+
+    Raises HTTPException(422) when any appliance's time window is too narrow
+    for its duration. The error body lists every offending appliance so the
+    UI can show all problems at once.
+    """
     config = Config("config.yaml")
-    file_path = config.get("data.file_path")
-    power_unit = config.get("data.power_unit", "kW")
 
     raw_appliances = config.get("appliances", [])
-    discovered = auto_discover_appliances(file_path, raw_appliances, power_unit)
-    for d in discovered:
+    for d in raw_appliances:
         if 'window_start' not in d: d['window_start'] = 0
-        if 'window_end' not in d: d['window_end'] = 23
-    appliances = [Appliance(**a) for a in discovered]
+        if 'window_end' not in d: d['window_end'] = 24
+    appliances = [Appliance(**a) for a in raw_appliances]
+
+    # Pre-flight feasibility check. If a user sets e.g. a 3-hour Dishwasher
+    # but a 7-9 AM window, we surface that as a structured 422 BEFORE
+    # spending any time on the optimizer.
+    constraint_errors = validate_appliance_constraints(appliances, num_slots=len(base_load))
+    if constraint_errors:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "infeasible_schedule",
+                "message": "One or more appliance windows are too narrow for the configured cycle duration.",
+                "errors": constraint_errors,
+            },
+        )
 
     safe_evening_idx = max(0, len(base_load) - 4)
     baseline_times = [safe_evening_idx] * len(appliances)
     original_import = evaluate_schedule(baseline_times, appliances, pv_series, base_load)
 
-    scheduler = GAScheduler(appliances, pv_series, base_load, config.get("optimization"))
-    best_times, optimized_import = scheduler.run()
+    try:
+        scheduler = GAScheduler(appliances, pv_series, base_load, config.get("optimization"))
+        best_times, optimized_import = scheduler.run()
+    except InfeasibleScheduleError as exc:
+        # Defense in depth -- should already have been caught above.
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "infeasible_schedule",
+                "message": str(exc),
+                "errors": exc.errors,
+            },
+        )
 
     original_daily_cost = calculate_egypt_daily_cost(original_import)
     optimized_daily_cost = calculate_egypt_daily_cost(optimized_import)
@@ -226,7 +253,7 @@ async def run_forecast_optimization(payload: OptimizationPayload):
 # ==========================================
 @app.post("/api/optimize/simulate")
 async def run_nasa_simulation(payload: SimulationPayload):
-    print(f"\n--- 🔬 HISTORICAL NASA SIMULATION TRIGGERED ({payload.target_date}) ---")
+    print(f"\n--- HISTORICAL NASA SIMULATION TRIGGERED ({payload.target_date}) ---")
     try:
         update_config_from_payload(payload)
         config = Config("config.yaml")
@@ -255,6 +282,9 @@ async def run_nasa_simulation(payload: SimulationPayload):
 
         # 4. Pass the NASA solar data to the same Genetic Algorithm
         return run_core_algorithm(pv_series, base_load, timestamps)
+    except HTTPException:
+        # Pass structured API errors (e.g. 422 infeasibility) through unchanged.
+        raise
     except Exception as exc:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"NASA simulation failed: {exc}")

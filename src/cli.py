@@ -10,9 +10,9 @@ import numpy as np
 
 from src.config import Config
 from src.utils import setup_logging
-from src.data_loader import load_and_clean_data, validate_data, auto_discover_appliances
+from src.data_loader import load_and_clean_data, validate_data
 from src.appliance import Appliance
-from src.optimizer import brute_force_search, GAScheduler
+from src.optimizer import brute_force_search, GAScheduler, InfeasibleScheduleError, validate_appliance_constraints
 from src.evaluation import evaluate_schedule
 from app import calculate_egypt_daily_cost
 
@@ -39,20 +39,24 @@ def main() -> None:
     try:
         file_path = config.get("data.file_path")
         power_unit = config.get("data.power_unit", "kW")
-        
-        raw_appliances_config = config.get("appliances", [])
-        discovered_appliances_config = auto_discover_appliances(
-            file_path=file_path,
-            appliances_config=raw_appliances_config,
-            power_unit=power_unit
-        )
-        
-        for app_dict in discovered_appliances_config:
-            if 'window_start' not in app_dict: app_dict['window_start'] = 0
-            if 'window_end' not in app_dict: app_dict['window_end'] = 23
 
-        appliances = [Appliance(**app) for app in discovered_appliances_config]
-        logger.info(f"Successfully locked {len(appliances)} appliances for scheduling.")
+        raw_appliances_config = config.get("appliances", [])
+        for app_dict in raw_appliances_config:
+            if 'window_start' not in app_dict: app_dict['window_start'] = 0
+            if 'window_end' not in app_dict: app_dict['window_end'] = 24
+
+        appliances = [Appliance(**app) for app in raw_appliances_config]
+        logger.info(f"Loaded {len(appliances)} appliances from config.yaml.")
+
+        # Pre-flight: refuse to run if any appliance window is too narrow
+        # for its cycle. Print a clean per-appliance error instead of a stack trace.
+        constraint_errors = validate_appliance_constraints(appliances, num_slots=24)
+        if constraint_errors:
+            print("\nERROR: appliance time windows are infeasible:\n", file=sys.stderr)
+            for err in constraint_errors:
+                print(f"  - {err['message']}", file=sys.stderr)
+            print(file=sys.stderr)
+            sys.exit(2)
 
         df = load_and_clean_data(
             file_path, config.get("data.timestamp_column"), config.get("data.pv_column"),

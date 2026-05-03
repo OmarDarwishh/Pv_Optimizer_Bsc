@@ -10,18 +10,83 @@ from src.appliance import Appliance
 
 logger = logging.getLogger(__name__)
 
-def get_valid_start_times(appliances: List[Appliance], num_slots: int) -> List[List[int]]:
-    """Calculates valid start times strictly within the allowed windows."""
-    valid_starts = []
+
+class InfeasibleScheduleError(ValueError):
+    """Raised when one or more appliances cannot fit inside their allowed time window.
+
+    Carries a list of structured error dicts (one per offending appliance) on
+    the `.errors` attribute so the API layer can return them to the user.
+    """
+
+    def __init__(self, errors: List[Dict[str, Any]]):
+        self.errors = errors
+        names = ", ".join(e["appliance"] for e in errors)
+        super().__init__(f"Infeasible schedule for: {names}")
+
+
+def validate_appliance_constraints(appliances: List[Appliance],
+                                   num_slots: int = 24) -> List[Dict[str, Any]]:
+    """Check every appliance's (window_start, window_end, duration_h) triple.
+
+    Returns a list of structured error dicts -- empty list means all feasible.
+    Collecting all errors at once (instead of failing on the first) lets the
+    UI show every problem in a single response so the user can fix them in
+    one round-trip.
+
+    `num_slots` is the simulation horizon (typically 24 for a daily run).
+    The effective window is clamped to `[window_start, min(window_end, num_slots)]`
+    -- so a 0-24 window on a 24-hour day is unrestricted, while a 0-24 window
+    on a hypothetical 12-hour test run is silently treated as 0-12.
+
+    A schedule is feasible iff the clamped window is at least as wide as the
+    cycle duration (in slots).
+    """
+    errors: List[Dict[str, Any]] = []
     for app in appliances:
         duration_slots = int(np.ceil(app.duration_h))
-        # Ensure it starts within the window AND finishes before the day ends
-        max_start_time = min(app.window_end, num_slots - duration_slots)
-        
-        if app.window_start > max_start_time:
-             raise ValueError(f"Appliance {app.name} cannot fit within its designated time window.")
-             
-        valid_starts.append(list(range(app.window_start, max_start_time + 1)))
+        effective_end = min(app.window_end, num_slots)
+        window_width = effective_end - app.window_start
+
+        if duration_slots > window_width:
+            errors.append({
+                "appliance": app.name,
+                "window_start": app.window_start,
+                "window_end": app.window_end,
+                "duration_h": app.duration_h,
+                "available_h": max(0, window_width),
+                "message": (
+                    f"{app.name} needs {app.duration_h:g} hour(s) to run, but the "
+                    f"selected window {app.window_start:02d}:00-{app.window_end:02d}:00 "
+                    f"only allows {max(0, window_width)} hour(s). "
+                    f"Widen the window or shorten the cycle."
+                ),
+            })
+
+    return errors
+
+
+def get_valid_start_times(appliances: List[Appliance], num_slots: int) -> List[List[int]]:
+    """Build the per-appliance list of allowed start hours.
+
+    `window_end` is interpreted as "the appliance must FINISH by this hour":
+    a cycle of `ceil(duration_h)` slots starting at hour `s` occupies
+    [s, s+duration_slots) and must satisfy `s + duration_slots <= window_end`.
+
+    Hard-fails with `InfeasibleScheduleError` if any appliance's window is
+    too narrow for its duration. Callers should normally run
+    `validate_appliance_constraints` first to catch this with all errors
+    collected, but we keep this internal check as a defense-in-depth so
+    the GA's gene_space can never be malformed.
+    """
+    errors = validate_appliance_constraints(appliances, num_slots)
+    if errors:
+        raise InfeasibleScheduleError(errors)
+
+    valid_starts: List[List[int]] = []
+    for app in appliances:
+        duration_slots = int(np.ceil(app.duration_h))
+        max_start = min(app.window_end, num_slots) - duration_slots
+        valid_starts.append(list(range(app.window_start, max_start + 1)))
     return valid_starts
 
 def brute_force_search(appliances: List[Appliance], pv_series: np.ndarray, base_load: np.ndarray) -> Tuple[List[int], float]:
