@@ -14,6 +14,7 @@ from src.data_loader import load_and_clean_data, validate_data, auto_discover_ap
 from src.appliance import Appliance
 from src.optimizer import brute_force_search, GAScheduler
 from src.evaluation import evaluate_schedule
+from app import calculate_egypt_daily_cost
 
 def calculate_search_space(appliances, base_load) -> int:
     num_slots = len(base_load)
@@ -115,46 +116,10 @@ def main() -> None:
                 scheduler = GAScheduler(appliances, pv_series, base_load, config.get("optimization"))
                 best_times, optimized_import = scheduler.run()
 
-        # --- THESIS FEATURE: EGYPTIAN TIERED PRICING ALGORITHM (OFFICIAL 2024/2025 TARIFFS) ---
-        def calculate_egypt_daily_cost(daily_kwh: float) -> float:
-            """
-            Calculates true daily cost using the official Egyptian Ministry of Electricity brackets.
-            Includes the 'Reset to Zero' penalty for crossing 100, 650, and 1000 kWh thresholds.
-            """
-            monthly_kwh = daily_kwh * 30
-            cost = 0.0
-
-            if monthly_kwh <= 50:
-                # Tier 1: Deep Subsidy
-                cost = monthly_kwh * 0.68
-                
-            elif monthly_kwh <= 100:
-                # Tier 2: Kept Subsidy
-                cost = (50 * 0.68) + ((monthly_kwh - 50) * 0.78)
-                
-            elif monthly_kwh <= 200:
-                # ⚠️ PENALTY 1: Exceeding 100 kWh loses the first two subsidies. Calculated from zero.
-                cost = monthly_kwh * 0.95
-                
-            elif monthly_kwh <= 350:
-                # Tier 4: Standard Middle Class
-                cost = (200 * 0.95) + ((monthly_kwh - 200) * 1.55)
-                
-            elif monthly_kwh <= 650:
-                # Tier 5: Upper Middle Class
-                cost = (200 * 0.95) + (150 * 1.55) + ((monthly_kwh - 350) * 1.95)
-                
-            elif monthly_kwh <= 1000:
-                # ⚠️ PENALTY 2: Exceeding 650 kWh loses ALL previous subsidies. Calculated from zero.
-                cost = monthly_kwh * 2.10
-                
-            else:
-                # ⚠️ PENALTY 3: Exceeding 1000 kWh. Highest penalty rate. Calculated from zero.
-                cost = monthly_kwh * 2.23
-
-            return cost / 30.0  # Convert the monthly bill back to a daily average cost
-
-        # Calculate bills using the realistic bracket system
+        # Egyptian residential tariff: cumulative-marginal brackets read from
+        # config.yaml. The CLI used to carry an inline copy of this function
+        # with the same continuity bug as app.py (cliffs at 100/650/1000 kWh);
+        # importing the canonical version keeps the two paths in lockstep.
         original_daily_cost = calculate_egypt_daily_cost(original_import)
         optimized_daily_cost = calculate_egypt_daily_cost(optimized_import)
         
@@ -229,7 +194,7 @@ def main() -> None:
             ax2.fill_between(df.index, base_load, optimized_total_load, color=COLOR_LOAD_NEW, alpha=0.3, label="Shifted Appliances")
             
             ax2.set_title("AI-OPTIMIZED: SMART SOLAR SELF-CONSUMPTION", fontsize=11, fontweight='bold', pad=15)
-            ax2.set_xlabel("Time of Day (Ausgrid/PVGIS Fused Dataset)", fontsize=10, fontweight='semibold')
+            ax2.set_xlabel("Time of Day (Ausgrid load + clear-sky/Open-Meteo PV)", fontsize=10, fontweight='semibold')
             ax2.set_ylabel("Power (kW)", fontsize=10, fontweight='semibold')
             ax2.set_ylim(0, max_y)
             ax2.grid(True, linestyle=':', alpha=0.5)

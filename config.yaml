@@ -21,7 +21,31 @@ data:
   power_unit: kW
   pv_column: pv_kw
   timestamp_column: timestamp
-electricity_price_per_kwh: 2.23
+# Egyptian residential electricity tariff (EEHC schedule).
+# Fully cumulative / marginal: each bracket charges its rate only on the
+# kWh that falls inside its [previous_limit, limit] window.
+# Source: Egyptian Electricity Holding Company residential schedule
+# (rates effective 2023 update; brackets remain valid through 2025-08).
+# Update `effective_date` and `brackets` when EEHC publishes a new schedule.
+electricity_tariff:
+  currency: EGP
+  effective_date: '2023-08-01'
+  source: EEHC residential tariff (cumulative marginal)
+  brackets:
+  - limit_kwh: 50
+    rate: 0.68
+  - limit_kwh: 100
+    rate: 0.78
+  - limit_kwh: 200
+    rate: 0.95
+  - limit_kwh: 350
+    rate: 1.55
+  - limit_kwh: 650
+    rate: 1.95
+  - limit_kwh: 1000
+    rate: 2.10
+  - limit_kwh: null    # everything above 1000 kWh/month
+    rate: 2.23
 optimization:
   ga:
     crossover_type: single_point
@@ -49,6 +73,22 @@ pv_system:
   capacity_kw: 5.0
   latitude: 30.0333
   longitude: 31.4833
-  loss_percent: 14
   tilt: 30
-  tilt_angle: 30
+  # System loss percentage applied to the DC side (soiling, mismatch,
+  # wiring, IAM, spectral, LID, nameplate, availability) per the PVWatts
+  # convention. Default 14% matches NREL PVWatts and PVGIS defaults.
+  loss_percent: 14
+  # Temperature coefficient of P_max (1/degC). NOT a degradation rate.
+  # Defaults to crystalline-silicon median per NREL module datasheet review.
+  # Mono-Si: -0.0035 to -0.0040, Poly-Si: -0.0040 to -0.0045,
+  # Thin-film CIGS/CdTe: -0.0025 to -0.0035.
+  gamma_pdc: -0.0040
+  module_technology: mono-Si
+  # DC array oversizing relative to AC inverter rating.
+  # Residential systems typically run 1.10-1.30 to harvest shoulder hours
+  # and clip the noon peak. Inverter clips at AC nameplate when DC > pac0.
+  dc_ac_ratio: 1.20
+  # Module height above ground (m), used to scale 10 m wind speed down to
+  # module-level wind via power-law (alpha=0.143, neutral atmosphere).
+  # Affects PVsyst cell-temperature model. Rooftop residential ~3 m.
+  module_height_m: 3.0

@@ -1,8 +1,22 @@
-import React from "react";
-import { Zap, TrendingUp, TrendingDown, BatteryCharging } from "lucide-react";
+import React, { useState } from "react";
+import {
+  Zap,
+  TrendingUp,
+  TrendingDown,
+  BatteryCharging,
+  LineChart,
+  CheckCircle2,
+  Download,
+  Coins,
+  Activity,
+  Sliders,
+  Satellite,
+  Play,
+} from "lucide-react";
 import {
   AreaChart,
   Area,
+  Line,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -60,79 +74,147 @@ const ApplianceBadge = (props) => {
 // --- TREND BADGE COMPONENT ---
 const TrendBadge = ({ value, label, isPositive }) => (
   <div
-    style={{
-      display: "inline-flex",
-      alignItems: "center",
-      gap: "4px",
-      background: isPositive
-        ? "rgba(16, 185, 129, 0.15)"
-        : "rgba(239, 68, 68, 0.15)",
-      color: isPositive ? "#10b981" : "#ef4444",
-      padding: "4px 8px",
-      borderRadius: "12px",
-      fontSize: "0.75rem",
-      fontWeight: "bold",
-      marginTop: "8px",
-    }}
+    className={`trend-badge ${isPositive ? "trend-badge--positive" : "trend-badge--negative"}`}
   >
-    {isPositive ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
-    {value} {label}
+    {isPositive ? <TrendingUp size={13} /> : <TrendingDown size={13} />}
+    {value} <span className="trend-badge__sub">{label}</span>
   </div>
 );
 
 export default function MainArea({ results }) {
+  const [graphMode, setGraphMode] = useState("optimized");
+
   if (!results) {
     return (
       <main className="main-content">
         <div className="header">
-          <h1 style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-            <Zap size={28} color="#10b981" /> System Overview
+          <h1>
+            <Zap size={24} color="#10b981" /> System Overview
           </h1>
+          <span className="header-badge header-badge--ready">Idle • Ready</span>
         </div>
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(3, 1fr)",
-            gap: "24px",
-          }}
-        >
-          <div className="placeholder-box" style={{ height: "120px" }}>
-            [Awaiting AI Input...]
+
+        <div className="kpi-grid">
+          <div className="empty-kpi">
+            <div className="empty-kpi__head">
+              <span className="empty-kpi__label">Optimized Grid Import</span>
+              <span className="empty-kpi__icon">
+                <Download size={18} />
+              </span>
+            </div>
+            <div className="empty-kpi__value">
+              —<span className="empty-kpi__unit">kWh</span>
+            </div>
+            <span className="empty-kpi__caption">
+              Energy pulled from the grid after the AI schedules appliances
+              onto solar surplus.
+            </span>
           </div>
-          <div className="placeholder-box" style={{ height: "120px" }}>
-            [Awaiting AI Input...]
+
+          <div className="empty-kpi">
+            <div className="empty-kpi__head">
+              <span className="empty-kpi__label">Self-Consumption Ratio</span>
+              <span className="empty-kpi__icon">
+                <BatteryCharging size={18} />
+              </span>
+            </div>
+            <div className="empty-kpi__value">
+              —<span className="empty-kpi__unit">%</span>
+            </div>
+            <span className="empty-kpi__caption">
+              Share of solar generation consumed on-site rather than exported
+              back to the grid.
+            </span>
           </div>
-          <div className="placeholder-box" style={{ height: "120px" }}>
-            [Awaiting AI Input...]
+
+          <div className="empty-kpi">
+            <div className="empty-kpi__head">
+              <span className="empty-kpi__label">Daily Financial Impact</span>
+              <span className="empty-kpi__icon">
+                <Coins size={18} />
+              </span>
+            </div>
+            <div className="empty-kpi__value">
+              —<span className="empty-kpi__unit">EGP</span>
+            </div>
+            <span className="empty-kpi__caption">
+              Estimated daily savings vs. running appliances at default peak
+              hours (Egyptian tariff).
+            </span>
           </div>
         </div>
-        <div
-          className="placeholder-box"
-          style={{ flex: 1, minHeight: "400px" }}
-        >
-          [Interactive Chart will appear after Optimization]
+
+        <div className="empty-chart">
+          <div className="empty-chart__icon">
+            <Activity size={32} />
+          </div>
+          <div className="empty-chart__title">Ready to Simulate</div>
+          <div className="empty-chart__sub">
+            Configure your PV hardware and appliance windows on the left,
+            then press <strong>Run AI Optimization</strong> to see your 24-hour
+            power profile with AI-shifted load blocks overlaid on solar
+            generation.
+          </div>
+          <div className="empty-chart__steps">
+            <div className="empty-chart__step">
+              <span className="empty-chart__step-num">1</span>
+              <Satellite size={14} /> Choose data source
+            </div>
+            <div className="empty-chart__step">
+              <span className="empty-chart__step-num">2</span>
+              <Sliders size={14} /> Tune hardware + appliances
+            </div>
+            <div className="empty-chart__step">
+              <span className="empty-chart__step-num">3</span>
+              <Play size={14} /> Run AI to generate schedule
+            </div>
+          </div>
         </div>
       </main>
     );
   }
 
   const { kpis, charts, schedules } = results;
+  const isCompareMode = Array.isArray(charts.pv_compare);
 
-  // --- DATA MAPPING ---
+  // Mean absolute % difference between the two PV curves, restricted to daylight hours.
+  // Using the symmetric denominator (mean of the two values) avoids blow-up when one
+  // curve dips near zero.
+  let meanDelta = null;
+  if (isCompareMode) {
+    const pairs = charts.pv_generation
+      .map((v, i) => ({ a: v, b: charts.pv_compare[i] }))
+      .filter((p) => p.a + p.b > 0.1); // ignore nighttime hours
+    if (pairs.length) {
+      const diffs = pairs.map(
+        (p) => (Math.abs(p.a - p.b) / ((p.a + p.b) / 2)) * 100,
+      );
+      meanDelta = diffs.reduce((s, d) => s + d, 0) / diffs.length;
+    }
+  }
+
+  // --- DATA MAPPING: Safely map Before and After logic ---
   const chartData = charts.timestamps.map((time, index) => {
-    const total = charts.load_profile[index];
-    const base = charts.base_load ? charts.base_load[index] : total;
-    const applianceOnly = Math.max(0, total - base);
+    const totalOptimized = charts.load_profile[index];
+    const base = charts.base_load ? charts.base_load[index] : totalOptimized;
+
+    // If we are in 'baseline' mode, the appliance load is 0 visually (it's embedded in the grey base load).
+    // If 'optimized', we calculate the red spike.
+    const applianceOnly =
+      graphMode === "optimized" ? Math.max(0, totalOptimized - base) : 0;
+
+    // In baseline mode, the total house load is just the grey base. In optimized, it's the grey base + red AI shifts.
+    const displayBaseLoad = graphMode === "optimized" ? base : base;
 
     return {
       time: time,
       pv: charts.pv_generation[index],
-      baseLoad: base,
+      pvCompare: isCompareMode ? charts.pv_compare[index] : null,
+      baseLoad: displayBaseLoad,
       applianceLoad: applianceOnly,
     };
   });
 
-  // Calculate UI Deltas safely
   const importSaved = (kpis.original_import - kpis.optimized_import).toFixed(1);
   const scImprovement = (kpis.self_consumption - (kpis.base_sc || 0)).toFixed(
     1,
@@ -141,150 +223,101 @@ export default function MainArea({ results }) {
   return (
     <main className="main-content">
       <div className="header">
-        <h1 style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-          <Zap size={28} color="#10b981" /> Optimization Results
+        <h1>
+          <Zap size={24} color="#10b981" /> Optimization Results
         </h1>
+        <span className="header-badge">
+          {isCompareMode ? "Compare Mode" : "Live"}
+        </span>
       </div>
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(3, 1fr)",
-          gap: "24px",
-        }}
-      >
-        {/* KPI 1: Grid Import */}
-        <div
-          style={{
-            background: "#1e293b",
-            padding: "20px",
-            borderRadius: "8px",
-            borderLeft: "4px solid #3b82f6",
-            display: "flex",
-            flexDirection: "column",
-            justifyContent: "space-between",
-          }}
-        >
-          <div>
-            <p
-              style={{
-                color: "#94a3b8",
-                fontSize: "0.85rem",
-                marginBottom: "4px",
-              }}
-            >
-              Optimized Grid Import
-            </p>
-            <h2 style={{ fontSize: "2rem", color: "#f8fafc", margin: 0 }}>
-              {kpis.optimized_import}{" "}
-              <span style={{ fontSize: "1rem", color: "#94a3b8" }}>kWh</span>
-            </h2>
+      <div className="kpi-grid">
+        <div className="kpi-card kpi-card--import">
+          <div className="kpi-card__head">
+            <span className="kpi-card__label">Optimized Grid Import</span>
+            <span className="kpi-card__icon">
+              <Download size={18} />
+            </span>
+          </div>
+          <div className="kpi-card__value">
+            {kpis.optimized_import}
+            <span className="kpi-card__unit">kWh</span>
           </div>
           <TrendBadge
             value={`${importSaved} kWh`}
-            label={`avoided (from original ${kpis.original_import} kWh)`}
+            label={`avoided (from ${kpis.original_import} kWh)`}
             isPositive={true}
           />
         </div>
 
-        {/* KPI 2: Self-Consumption */}
-        <div
-          style={{
-            background: "#1e293b",
-            padding: "20px",
-            borderRadius: "8px",
-            borderLeft: "4px solid #10b981",
-            display: "flex",
-            flexDirection: "column",
-            justifyContent: "space-between",
-          }}
-        >
-          <div>
-            <p
-              style={{
-                color: "#94a3b8",
-                fontSize: "0.85rem",
-                marginBottom: "4px",
-                display: "flex",
-                alignItems: "center",
-                gap: "6px",
-              }}
-            >
-              <BatteryCharging size={14} color="#10b981" /> Self-Consumption
-              Ratio
-            </p>
-            <h2 style={{ fontSize: "2rem", color: "#f8fafc", margin: 0 }}>
-              {kpis.self_consumption}%
-            </h2>
+        <div className="kpi-card kpi-card--sc">
+          <div className="kpi-card__head">
+            <span className="kpi-card__label">Self-Consumption Ratio</span>
+            <span className="kpi-card__icon">
+              <BatteryCharging size={18} />
+            </span>
           </div>
-          {/* UPDATED: Clearly shows the exact Baseline SC before optimization */}
+          <div className="kpi-card__value">
+            {kpis.self_consumption}
+            <span className="kpi-card__unit">%</span>
+          </div>
           {kpis.base_sc !== undefined && (
             <TrendBadge
               value={`+${scImprovement}%`}
-              label={`improvement (from original ${kpis.base_sc}%)`}
+              label={`improvement (from ${kpis.base_sc}%)`}
               isPositive={true}
             />
           )}
         </div>
 
-        {/* KPI 3: Financials */}
-        <div
-          style={{
-            background: "#1e293b",
-            padding: "20px",
-            borderRadius: "8px",
-            borderLeft: "4px solid #eab308",
-            display: "flex",
-            flexDirection: "column",
-            justifyContent: "space-between",
-          }}
-        >
-          <div>
-            <p
-              style={{
-                color: "#94a3b8",
-                fontSize: "0.85rem",
-                marginBottom: "4px",
-              }}
-            >
-              Daily Financial Impact
-            </p>
-            <h2 style={{ fontSize: "2rem", color: "#f8fafc", margin: 0 }}>
-              {kpis.cost_saved}{" "}
-              <span style={{ fontSize: "1rem", color: "#94a3b8" }}>EGP</span>
-            </h2>
+        <div className="kpi-card kpi-card--cost">
+          <div className="kpi-card__head">
+            <span className="kpi-card__label">Daily Financial Impact</span>
+            <span className="kpi-card__icon">
+              <Coins size={18} />
+            </span>
           </div>
-          <p
-            style={{
-              color: "#94a3b8",
-              fontSize: "0.75rem",
-              margin: 0,
-              marginTop: "12px",
-            }}
-          >
-            Calculated via Egyptian Ministry of Electricity Tariff
-          </p>
+          <div className="kpi-card__value">
+            {kpis.cost_saved}
+            <span className="kpi-card__unit">EGP</span>
+          </div>
+          <div className="kpi-card__footer">
+            Egyptian Ministry of Electricity Tariff
+          </div>
         </div>
       </div>
 
-      <div
-        style={{
-          background: "#1e293b",
-          padding: "24px",
-          borderRadius: "8px",
-          flex: 1,
-          minHeight: "400px",
-          marginTop: "24px",
-          display: "flex",
-          flexDirection: "column",
-        }}
-      >
-        <h3
-          style={{ marginBottom: "20px", fontSize: "1rem", color: "#f8fafc" }}
-        >
-          24-Hour Power Profile
-        </h3>
+      {/* GRAPH SECTION WITH TOGGLE */}
+      <div className="chart-panel">
+        <div className="chart-panel__head">
+          <div className="chart-panel__title">
+            <h3>24-Hour Power Profile</h3>
+            <span>
+              {isCompareMode
+                ? `PVGIS Live vs. NASA Historical • Mean daytime Δ: ${
+                    meanDelta !== null ? meanDelta.toFixed(1) : "—"
+                  }%`
+                : "Solar generation vs. household load across the day"}
+            </span>
+          </div>
 
+          <div className="toggle-group">
+            <button
+              onClick={() => setGraphMode("baseline")}
+              className={`pill ${graphMode === "baseline" ? "pill--active-neutral" : ""}`}
+            >
+              <LineChart size={14} /> Baseline (Before)
+            </button>
+            <button
+              onClick={() => setGraphMode("optimized")}
+              className={`pill ${graphMode === "optimized" ? "pill--active-green" : ""}`}
+            >
+              <CheckCircle2 size={14} /> AI Optimized (After)
+            </button>
+          </div>
+        </div>
+
+        {/* THE GRAPH */}
         <ResponsiveContainer width="100%" flex={1}>
           <AreaChart
             data={chartData}
@@ -343,7 +376,10 @@ export default function MainArea({ results }) {
               wrapperStyle={{ paddingTop: "20px" }}
             />
 
-            {schedules &&
+            {/* Appliance overlay hidden in compare mode — the chart is about curve divergence, not scheduling */}
+            {graphMode === "optimized" &&
+              !isCompareMode &&
+              schedules &&
               schedules.map((app, index) => (
                 <ReferenceArea
                   key={index}
@@ -367,15 +403,19 @@ export default function MainArea({ results }) {
               fillOpacity={0.8}
               name="Base Load (kW)"
             />
-            <Area
-              type="stepAfter"
-              dataKey="applianceLoad"
-              stroke="#ef4444"
-              strokeWidth={2}
-              fill="url(#colorAppLoad)"
-              fillOpacity={1}
-              name="AI Shifted Appliances (kW)"
-            />
+
+            {graphMode === "optimized" && !isCompareMode && (
+              <Area
+                type="stepAfter"
+                dataKey="applianceLoad"
+                stroke="#ef4444"
+                strokeWidth={2}
+                fill="url(#colorAppLoad)"
+                fillOpacity={1}
+                name="AI Shifted Appliances (kW)"
+              />
+            )}
+
             <Area
               type="monotone"
               dataKey="pv"
@@ -383,8 +423,22 @@ export default function MainArea({ results }) {
               strokeWidth={2}
               fillOpacity={1}
               fill="url(#colorPv)"
-              name="Solar Generation (kW)"
+              name={isCompareMode ? "PVGIS Live (kW)" : "Solar Generation (kW)"}
             />
+
+            {isCompareMode && (
+              <Line
+                type="monotone"
+                dataKey="pvCompare"
+                stroke="#3b82f6"
+                strokeWidth={2}
+                strokeDasharray="6 4"
+                dot={false}
+                activeDot={{ r: 4 }}
+                name="NASA Historical (kW)"
+                isAnimationActive={false}
+              />
+            )}
           </AreaChart>
         </ResponsiveContainer>
       </div>

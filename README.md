@@ -54,7 +54,7 @@ appliances:
    Fetch tomorrow's astronomy and weather forecast:
 
 Bash
-python scripts/fetch_pvgis_data.py 4. Execute the Optimizer
+python scripts/fetch_forecast_data.py 4. Execute the Optimizer
 
 Bash
 pv-optimizer

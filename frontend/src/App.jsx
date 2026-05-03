@@ -24,10 +24,28 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [backendData, setBackendData] = useState(null);
 
+  // "live"     → PVGIS + Open-Meteo day-ahead forecast
+  // "nasa"     → NASA POWER + pvlib historical simulation
+  // "compare"  → run BOTH in parallel and overlay the two PV curves for validation
+  const [dataMode, setDataMode] = useState("live");
+
+  // Historical Analog Day: month/day is always "tomorrow" (computed at submit time).
+  // Only the year is user-selectable — defaults to last year.
+  const [targetYear, setTargetYear] = useState(
+    () => new Date().getFullYear() - 1,
+  );
+
+  // Compute tomorrow's calendar day overlaid on the chosen year → "YYYYMMDD" for NASA.
+  const buildAnalogDate = () => {
+    const d = new Date();
+    d.setDate(d.getDate() + 1); // tomorrow's month/day
+    d.setFullYear(targetYear); // overlay the selected past year
+    return d.toISOString().slice(0, 10).replace(/-/g, "");
+  };
+
   const handleOptimize = async () => {
     setLoading(true);
 
-    // NEW PAYLOAD: Sends the 'enabled' toggles directly to Python
     const payload = {
       pv_system: {
         azimuth: config.azimuth,
@@ -53,17 +71,51 @@ function App() {
       },
     };
 
-    try {
-      const response = await axios.post(
-        "http://localhost:8000/api/optimize",
-        payload,
-      );
+    const LIVE_URL = "http://localhost:8000/api/optimize/live";
+    const NASA_URL = "http://localhost:8000/api/optimize/simulate";
 
-      console.log("Python replied with:", response.data);
-      setBackendData(response.data);
+    try {
+      if (dataMode === "compare") {
+        // Fire both endpoints in parallel, then merge: Live provides the primary
+        // result (KPIs, schedules, base_load); NASA's PV curve is attached as an overlay.
+        const nasaPayload = { ...payload, target_date: buildAnalogDate() };
+        const [liveRes, nasaRes] = await Promise.all([
+          axios.post(LIVE_URL, payload),
+          axios.post(NASA_URL, nasaPayload),
+        ]);
+
+        const merged = {
+          ...liveRes.data,
+          charts: {
+            ...liveRes.data.charts,
+            pv_compare: nasaRes.data.charts.pv_generation,
+          },
+          compare: {
+            live_kpis: liveRes.data.kpis,
+            nasa_kpis: nasaRes.data.kpis,
+          },
+        };
+        setBackendData(merged);
+      } else if (dataMode === "nasa") {
+        payload.target_date = buildAnalogDate();
+        const response = await axios.post(NASA_URL, payload);
+        setBackendData(response.data);
+      } else {
+        const response = await axios.post(LIVE_URL, payload);
+        setBackendData(response.data);
+      }
     } catch (error) {
-      console.error("Connection failed! Is the Python server running?", error);
-      alert("Failed to connect to Python backend.");
+      console.error("Backend call failed:", error);
+      const detail =
+        error.response?.data?.detail ||
+        error.response?.statusText ||
+        error.message ||
+        "Unknown error";
+      alert(
+        error.response
+          ? `Backend returned ${error.response.status}: ${detail}`
+          : `Failed to reach Python backend (${detail}). Is uvicorn running on :8000?`,
+      );
     }
 
     setLoading(false);
@@ -76,6 +128,10 @@ function App() {
         setConfig={setConfig}
         handleOptimize={handleOptimize}
         loading={loading}
+        dataMode={dataMode}
+        setDataMode={setDataMode}
+        targetYear={targetYear}
+        setTargetYear={setTargetYear}
       />
       <MainArea results={backendData} />
     </div>
