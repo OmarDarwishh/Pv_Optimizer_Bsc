@@ -67,13 +67,13 @@ function App() {
     capacity: 5.0,
     dwEnabled: true,
     dwStart: 10,
-    dwEnd: 16,
+    dwEnd: 17,
     wmEnabled: true,
     wmStart: 9,
-    wmEnd: 15,
+    wmEnd: 16,
     whEnabled: true,
-    whStart: 0,
-    whEnd: 12,
+    whStart: 6,
+    whEnd: 18,
   });
 
   const [loading, setLoading] = useState(false);

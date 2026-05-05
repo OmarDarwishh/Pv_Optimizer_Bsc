@@ -227,7 +227,7 @@ export default function MainArea({ results }) {
           <Zap size={24} color="#10b981" /> Optimization Results
         </h1>
         <span className="header-badge">
-          {isCompareMode ? "Compare Mode" : "Live"}
+          {isCompareMode ? "Compare Mode" : "PVGIS + Open-Meteo"}
         </span>
       </div>
 
@@ -294,7 +294,7 @@ export default function MainArea({ results }) {
             <h3>24-Hour Power Profile</h3>
             <span>
               {isCompareMode
-                ? `PVGIS Live vs. NASA Historical • Mean daytime Δ: ${
+                ? `PVGIS + Open-Meteo vs. NASA Historical • Mean daytime Δ: ${
                     meanDelta !== null ? meanDelta.toFixed(1) : "—"
                   }%`
                 : "Solar generation vs. household load across the day"}
@@ -423,7 +423,7 @@ export default function MainArea({ results }) {
               strokeWidth={2}
               fillOpacity={1}
               fill="url(#colorPv)"
-              name={isCompareMode ? "PVGIS Live (kW)" : "Solar Generation (kW)"}
+              name={isCompareMode ? "PVGIS + Open-Meteo (kW)" : "Solar Generation (kW)"}
             />
 
             {isCompareMode && (

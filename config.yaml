@@ -2,18 +2,18 @@ appliances:
 - duration_h: 2.0
   name: Dishwasher
   power_kw: 1.5
-  window_end: 16
-  window_start: 15
+  window_end: 17
+  window_start: 10
 - duration_h: 1.5
   name: Washing Machine
   power_kw: 2.0
-  window_end: 15
+  window_end: 16
   window_start: 9
 - duration_h: 3.0
   name: Water Heater
   power_kw: 3.0
-  window_end: 12
-  window_start: 0
+  window_end: 18
+  window_start: 6
 data:
   file_path: data/raw/dynamic_cairo_target.csv
   frequency: h

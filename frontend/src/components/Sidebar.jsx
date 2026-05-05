@@ -121,7 +121,7 @@ export default function Sidebar({
               onClick={() => setDataMode("live")}
               className={`pill ${dataMode === "live" ? "pill--active-green" : ""}`}
             >
-              <CloudSun size={13} /> Live
+              <CloudSun size={13} /> PVGIS + Open-Meteo
             </button>
           </div>
 
